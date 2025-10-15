@@ -37,4 +37,7 @@ jobs:
 
     - name: Terraform Apply
       run: terraform apply -auto-approve
-
+      
+    - name: Upload Frontend to S3
+      run: |
+        aws s3 cp frontend/index.html s3://my-serverless-frontend-bucket/index.html --acl public-read
