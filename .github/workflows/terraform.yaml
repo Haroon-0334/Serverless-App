@@ -8,7 +8,7 @@ on:
     inputs:
       action:
         description: 'Choose Terraform action'
-        required: true
+        required: false
         default: 'apply'
         type: choice
         options:
@@ -44,18 +44,22 @@ jobs:
 
       - name: Run Terraform
         run: |
-          if [ "${{ github.event.inputs.action }}" == "apply" ]; then
-            echo "Deploying infrastructure..."
-            terraform plan
-            terraform apply -auto-approve
+          # Use the action input if present, otherwise default to 'apply' for push triggers
+          ACTION="${{ github.event.inputs.action || 'apply' }}"
 
-            echo "Uploading frontend to S3..."
-            aws s3 cp frontend/index.html s3://my-serverless-frontend-bucket/index.html --acl public-read
+          if [ "$ACTION" == "apply" ]; then
+              echo "Deploying infrastructure..."
+              terraform plan
+              terraform apply -auto-approve
 
-          elif [ "${{ github.event.inputs.action }}" == "destroy" ]; then
-            echo "Destroying infrastructure..."
-            terraform destroy -auto-approve || echo "Some resources may not exist, continuing..."
+              echo "Uploading frontend to S3..."
+              aws s3 cp frontend/index.html s3://my-serverless-frontend-bucket/index.html --acl public-read
+
+          elif [ "$ACTION" == "destroy" ]; then
+              echo "Destroying infrastructure..."
+              terraform destroy -auto-approve || echo "Some resources may not exist, continuing..."
+
           else
-            echo "Unknown action: ${{ github.event.inputs.action }}"
-            exit 1
+              echo "Unknown action: $ACTION"
+              exit 1
           fi
