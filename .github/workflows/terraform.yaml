@@ -16,7 +16,8 @@ jobs:
   terraform:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout Repository
+        uses: actions/checkout@v3
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
@@ -36,10 +37,17 @@ jobs:
       - name: Run Terraform
         run: |
           if [ "${{ github.event.inputs.action }}" == "apply" ]; then
+            echo "Deploying infrastructure..."
             terraform plan
             terraform apply -auto-approve
+
+            # Upload frontend to S3 (optional)
+            echo "Uploading frontend to S3..."
+            aws s3 cp frontend/index.html s3://my-serverless-frontend-bucket/index.html --acl public-read
+
           elif [ "${{ github.event.inputs.action }}" == "destroy" ]; then
-            terraform destroy -auto-approve
+            echo "Destroying infrastructure..."
+            terraform destroy -auto-approve || echo "Some resources may not exist, continuing..."
           else
             echo "Unknown action: ${{ github.event.inputs.action }}"
             exit 1
