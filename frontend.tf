@@ -14,4 +14,4 @@ resource "aws_s3_bucket_policy" "frontend_policy" {
       Resource = "${aws_s3_bucket.frontend.arn}/*"
     }]
   })
-}
+
