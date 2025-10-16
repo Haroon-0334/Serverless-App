@@ -1,0 +1,15 @@
+# VS Code settings
+.vscode/
+
+# Terraform state files
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# Logs
+*.log
+
+# Serverless or Lambda specific
+lambda_function/__pycache__/
+lambda_function/*.zip

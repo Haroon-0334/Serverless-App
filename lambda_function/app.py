@@ -14,6 +14,12 @@ def lambda_handler(event, context):
     table.put_item(Item={"item_id": item_id, "name": item_name})
 
     return {
-        "statusCode": 200,
-        "body": json.dumps({"item_id": item_id, "name": item_name})
-    }
+    "statusCode": 200,
+    "headers": {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "OPTIONS,POST,GET",
+        "Access-Control-Allow-Headers": "Content-Type"
+    },
+    "body": json.dumps({"item_id": item_id, "name": item_name})
+}
+
