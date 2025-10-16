@@ -40,4 +40,6 @@ jobs:
 
       - name: Upload Frontend to S3
         run: |
-          aws s3 cp frontend/index.html s3://my-serverless-frontend-bucket/index.html --acl public-read
+          BUCKET_NAME=$(terraform output -raw website_bucket_name)
+          echo "Uploading to bucket: $BUCKET_NAME"
+          aws s3 sync frontend/ s3://$BUCKET_NAME/ --acl public-read
