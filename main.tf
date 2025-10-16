@@ -1,6 +1,4 @@
-#############################
 # DynamoDB Table
-#############################
 resource "aws_dynamodb_table" "items" {
   name         = "ItemsTable"
   billing_mode = "PAY_PER_REQUEST"
@@ -16,76 +14,62 @@ resource "aws_dynamodb_table" "items" {
   }
 }
 
-#############################
 # IAM Role for Lambda
-#############################
 resource "aws_iam_role" "lambda_role" {
   name = "LambdaDynamoDBRole"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
-      Principal = {
-        Service = "lambda.amazonaws.com"
-      }
-    }]
-  })
-}
 
-resource "aws_iam_role_policy" "lambda_policy" {
-  name = "LambdaDynamoDBPolicy"
-  role = aws_iam_role.lambda_role.id
-  policy = jsonencode({
+  assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Action = [
-          "dynamodb:PutItem",
-          "dynamodb:GetItem",
-          "dynamodb:UpdateItem",
-          "dynamodb:DeleteItem",
-          "dynamodb:Scan",
-          "dynamodb:Query"
-        ]
-        Effect   = "Allow"
-        Resource = aws_dynamodb_table.items.arn
-      },
-      {
-        Action = [
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:PutLogEvents"
-        ]
-        Effect   = "Allow"
-        Resource = "*"
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
       }
     ]
   })
 }
 
-#############################
+# IAM Policy for Lambda
+resource "aws_iam_role_policy" "lambda_policy" {
+  name = "LambdaDynamoDBPolicy"
+  role = aws_iam_role.lambda_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = [
+          "dynamodb:PutItem",
+          "dynamodb:Scan",
+          "dynamodb:GetItem"
+        ]
+        Resource = aws_dynamodb_table.items.arn
+      }
+    ]
+  })
+}
+
 # Lambda Function
-#############################
 resource "aws_lambda_function" "app_lambda" {
   function_name = "ServerlessAppFunction"
   handler       = "app.lambda_handler"
   runtime       = "python3.11"
   role          = aws_iam_role.lambda_role.arn
-  filename      = "lambda_function/app.zip"
-
-  source_code_hash = filebase64sha256("lambda_function/app.zip")
+  filename      = "lambda_function/app.zip"  # Your zipped Lambda
+  timeout       = 10
 }
 
-#############################
-# API Gateway
-#############################
+# API Gateway REST API
 resource "aws_api_gateway_rest_api" "api" {
   name        = "ServerlessAppAPI"
   description = "API for Serverless App"
 }
 
-# /item Resource
+# API Gateway Resource /item
 resource "aws_api_gateway_resource" "items" {
   rest_api_id = aws_api_gateway_rest_api.api.id
   parent_id   = aws_api_gateway_rest_api.api.root_resource_id
@@ -100,7 +84,7 @@ resource "aws_api_gateway_method" "post_item" {
   authorization = "NONE"
 }
 
-# Lambda Integration for POST
+# Lambda Integration
 resource "aws_api_gateway_integration" "lambda_post_item" {
   rest_api_id             = aws_api_gateway_rest_api.api.id
   resource_id             = aws_api_gateway_resource.items.id
@@ -110,20 +94,15 @@ resource "aws_api_gateway_integration" "lambda_post_item" {
   uri                     = aws_lambda_function.app_lambda.invoke_arn
 }
 
-# Lambda Invoke Permission
+# Lambda Permission for API Gateway
 resource "aws_lambda_permission" "api_gw" {
   statement_id  = "AllowAPIGatewayInvoke"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.app_lambda.function_name
   principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/*/*"
 }
 
-#############################
-# CORS Configuration (OPTIONS)
-#############################
-
-# OPTIONS method (for CORS preflight)
+# OPTIONS Method for CORS
 resource "aws_api_gateway_method" "options_item" {
   rest_api_id   = aws_api_gateway_rest_api.api.id
   resource_id   = aws_api_gateway_resource.items.id
@@ -131,7 +110,18 @@ resource "aws_api_gateway_method" "options_item" {
   authorization = "NONE"
 }
 
-# OPTIONS method response
+# OPTIONS Integration (MOCK)
+resource "aws_api_gateway_integration" "options_integration" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.items.id
+  http_method = aws_api_gateway_method.options_item.http_method
+  type        = "MOCK"
+  request_templates = {
+    "application/json" = jsonencode({ statusCode = 200 })
+  }
+}
+
+# OPTIONS Method Response
 resource "aws_api_gateway_method_response" "options_method_response" {
   rest_api_id = aws_api_gateway_rest_api.api.id
   resource_id = aws_api_gateway_resource.items.id
@@ -149,19 +139,7 @@ resource "aws_api_gateway_method_response" "options_method_response" {
   }
 }
 
-# OPTIONS integration (mock)
-resource "aws_api_gateway_integration" "options_integration" {
-  rest_api_id = aws_api_gateway_rest_api.api.id
-  resource_id = aws_api_gateway_resource.items.id
-  http_method = aws_api_gateway_method.options_item.http_method
-  type        = "MOCK"
-
-  request_templates = {
-    "application/json" = "{\"statusCode\": 200}"
-  }
-}
-
-# OPTIONS integration response
+# OPTIONS Integration Response
 resource "aws_api_gateway_integration_response" "options_integration_response" {
   rest_api_id = aws_api_gateway_rest_api.api.id
   resource_id = aws_api_gateway_resource.items.id
@@ -173,40 +151,32 @@ resource "aws_api_gateway_integration_response" "options_integration_response" {
     "method.response.header.Access-Control-Allow-Methods" = "'GET,POST,OPTIONS'"
     "method.response.header.Access-Control-Allow-Origin"  = "'*'"
   }
-
-  response_templates = {
-    "application/json" = ""
-  }
-
-  depends_on = [aws_api_gateway_integration.options_integration]
 }
 
-#############################
-# API Deployment and Stage
-#############################
+# API Gateway Deployment
 resource "aws_api_gateway_deployment" "deployment" {
-  depends_on = [
-    aws_api_gateway_integration.lambda_post_item,
-    aws_api_gateway_integration_response.options_integration_response,
-    aws_api_gateway_method_response.options_method_response
-  ]
-
   rest_api_id = aws_api_gateway_rest_api.api.id
 
-  # Use timestamp() instead of sha1(jsonencode(...))
-  # This ensures a new deployment is created without deleting the old one first.
   triggers = {
-    redeployment = timestamp()
+    redeployment = sha1(jsonencode([
+      aws_lambda_function.app_lambda.source_code_hash,
+      aws_api_gateway_method.post_item.id,
+    ]))
   }
 
   lifecycle {
-    create_before_destroy = true
+    prevent_destroy = false
   }
 }
 
 
+# Stage
 resource "aws_api_gateway_stage" "prod" {
-  deployment_id = aws_api_gateway_deployment.deployment.id
-  rest_api_id   = aws_api_gateway_rest_api.api.id
   stage_name    = "prod"
+  rest_api_id   = aws_api_gateway_rest_api.api.id
+  deployment_id = aws_api_gateway_deployment.deployment.id
+
+   depends_on = [
+    aws_api_gateway_deployment.deployment
+  ]
 }
